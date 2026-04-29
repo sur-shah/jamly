@@ -104,6 +104,7 @@ The analyzer currently performs a real baseline pass:
 - extracts sample rate
 - estimates tempo
 - counts beats and onsets
+- marks tempo as `insufficient_rhythm` when a clip is too short or sparse for reliable timing feedback
 
 It does not yet compare detected notes to expected chord tones.
 

@@ -64,7 +64,7 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
 
     expected_chords = exercise.target_analysis.get("expected_chords", exercise.chord_progression)
     first_focus = expected_chords[1] if len(expected_chords) > 1 else expected_chords[0]
-    tempo_status = classify_tempo(audio_features["estimated_tempo_bpm"], exercise.tempo_bpm)
+    tempo_status = classify_tempo(audio_features, exercise.tempo_bpm)
     note_analysis = detect_notes(Path(recording.file_path))
     score = score_audio_features(tempo_status, audio_features["onset_count"])
 
@@ -142,7 +142,15 @@ def extract_audio_features(file_path: Path) -> dict[str, float | int]:
     }
 
 
-def classify_tempo(estimated_bpm: float, target_bpm: int) -> str:
+def classify_tempo(audio_features: dict[str, float | int], target_bpm: int) -> str:
+    estimated_bpm = float(audio_features["estimated_tempo_bpm"])
+    duration_seconds = float(audio_features["duration_seconds"])
+    beat_count = int(audio_features["beat_count"])
+    onset_count = int(audio_features["onset_count"])
+
+    if duration_seconds < 4 or beat_count < 4 or onset_count < 4:
+        return "insufficient_rhythm"
+
     if estimated_bpm <= 0:
         return "unknown"
 
@@ -166,6 +174,7 @@ def score_audio_features(tempo_status: str, onset_count: int) -> int:
         "slightly_fast": 8,
         "too_slow": 18,
         "too_fast": 18,
+        "insufficient_rhythm": 4,
         "unknown": 15,
     }
     score -= tempo_penalties.get(tempo_status, 10)
@@ -196,15 +205,17 @@ def build_audio_feature_issues(
     ]
 
     if tempo_status != "on_target":
-        issues.append(
-            {
-                "type": "timing",
-                "detail": (
-                    f"The estimated tempo is {audio_features['estimated_tempo_bpm']} BPM, "
-                    f"which is classified as {tempo_status.replace('_', ' ')}."
-                ),
-            }
-        )
+        if tempo_status == "insufficient_rhythm":
+            detail = (
+                "This clip is too short or sparse to judge tempo reliably. Record a longer "
+                "take with repeated strums or notes for timing feedback."
+            )
+        else:
+            detail = (
+                f"The estimated tempo is {audio_features['estimated_tempo_bpm']} BPM, "
+                f"which is classified as {tempo_status.replace('_', ' ')}."
+            )
+        issues.append({"type": "timing", "detail": detail})
 
     if audio_features["onset_count"] == 0:
         issues.append(
@@ -236,6 +247,8 @@ def build_audio_feature_feedback(
 ) -> dict[str, str]:
     if tempo_status == "on_target":
         main_fix = "Your tempo is close to the target. Next we need note-level analysis."
+    elif tempo_status == "insufficient_rhythm":
+        main_fix = "This clip is too short or sparse to judge tempo reliably."
     elif tempo_status == "unknown":
         main_fix = "The analyzer could not estimate a stable tempo from this recording."
     else:
@@ -259,10 +272,22 @@ def build_audio_feature_feedback(
         ),
         "main_fix": main_fix,
         "practice_tip": (
-            f"Practice with a metronome at {max(exercise.tempo_bpm - 10, 50)} BPM, then "
-            f"record again at {exercise.tempo_bpm} BPM and compare the tempo estimate."
+            build_practice_tip(exercise, tempo_status)
         ),
     }
+
+
+def build_practice_tip(exercise: Exercise, tempo_status: str) -> str:
+    if tempo_status == "insufficient_rhythm":
+        return (
+            "Record the full progression with at least four steady strums or note attacks "
+            "so Jamly has enough rhythm information to evaluate timing."
+        )
+
+    return (
+        f"Practice with a metronome at {max(exercise.tempo_bpm - 10, 50)} BPM, then "
+        f"record again at {exercise.tempo_bpm} BPM and compare the tempo estimate."
+    )
 
 
 def build_unreadable_audio_analysis(exercise: Exercise, error: str) -> dict[str, Any]:
