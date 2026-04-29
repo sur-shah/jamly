@@ -1,0 +1,136 @@
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.models import Genre, Instrument, PracticeFocus, RecordingStatus, SessionStatus, SkillLevel
+
+
+class UserCreate(BaseModel):
+    display_name: str = Field(
+        examples=["Sur"],
+        description="The name shown in the app.",
+    )
+    email: EmailStr | None = Field(
+        default=None,
+        examples=["sur@example.com"],
+        description="Optional email for the user account.",
+    )
+
+
+class UserRead(BaseModel):
+    id: int
+    display_name: str
+    email: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PreferenceUpsert(BaseModel):
+    instrument: Instrument = Field(description="The instrument the user wants to practice.")
+    genre: Genre = Field(description="The style of music the user wants to work on.")
+    level: SkillLevel = Field(description="The user's current skill level.")
+    focus: PracticeFocus = Field(
+        default=PracticeFocus.chords,
+        description="The main skill area for generated exercises.",
+    )
+    daily_minutes: int = Field(
+        default=20,
+        ge=5,
+        le=180,
+        description="How many minutes the user wants to practice each day.",
+    )
+    reminder_time: str | None = Field(
+        default=None,
+        examples=["18:00"],
+        description="Optional daily reminder time in 24-hour HH:MM format.",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "instrument": "guitar",
+                "genre": "blues",
+                "level": "beginner",
+                "focus": "chords",
+                "daily_minutes": 20,
+                "reminder_time": "18:00",
+            }
+        }
+    )
+
+
+class PreferenceRead(PreferenceUpsert):
+    id: int
+    user_id: int
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExerciseRead(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    instrument: Instrument
+    genre: Genre
+    level: SkillLevel
+    focus: PracticeFocus
+    key: str
+    tempo_bpm: int
+    chord_progression: list[str]
+    steps: list[dict[str, Any]]
+    target_analysis: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PracticeSessionCreate(BaseModel):
+    user_id: int = Field(description="The id returned by POST /users.")
+    exercise_id: int = Field(description="The id returned by POST /exercises/daily.")
+
+    model_config = ConfigDict(json_schema_extra={"example": {"user_id": 1, "exercise_id": 1}})
+
+
+class PracticeSessionRead(BaseModel):
+    id: int
+    user_id: int
+    exercise_id: int
+    status: SessionStatus
+    started_at: datetime
+    completed_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecordingRead(BaseModel):
+    id: int
+    practice_session_id: int
+    original_filename: str
+    content_type: str
+    status: RecordingStatus
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FeedbackReportRead(BaseModel):
+    id: int
+    practice_session_id: int
+    recording_id: int
+    score: int
+    summary: str
+    main_fix: str
+    practice_tip: str
+    analysis: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecordingUploadRead(BaseModel):
+    recording: RecordingRead
+    feedback_report: FeedbackReportRead
+    message: str = "Recording uploaded and analyzed."
