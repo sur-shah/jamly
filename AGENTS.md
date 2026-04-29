@@ -116,6 +116,14 @@ When Basic Pitch is installed, the analyzer also returns:
 - pitch classes
 - confidence scores
 
+The analyzer also creates `analysis_windows`:
+
+- each window represents an expected chord/event span
+- onset-derived windows are used when there is enough spacing between attacks
+- equal-length fallback windows are used when onset data is too sparse/noisy
+- note events are assigned to windows by time overlap
+- arpeggios work because tones can appear anywhere inside the same window
+
 Current analysis modes:
 
 - `audio_features`: audio decoded and baseline features extracted

@@ -66,6 +66,12 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
     first_focus = expected_chords[1] if len(expected_chords) > 1 else expected_chords[0]
     tempo_status = classify_tempo(audio_features, exercise.tempo_bpm)
     note_analysis = detect_notes(Path(recording.file_path))
+    analysis_windows = build_analysis_windows(
+        expected_chords=expected_chords,
+        duration_seconds=float(audio_features["duration_seconds"]),
+        onset_times=audio_features["onset_times"],
+        note_events=note_analysis.get("note_events", []),
+    )
     score = score_audio_features(tempo_status, audio_features["onset_count"])
 
     return {
@@ -87,8 +93,10 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
             "onset_count": audio_features["onset_count"],
             "beat_count": audio_features["beat_count"],
             "onset_rate_per_second": audio_features["onset_rate_per_second"],
+            "onset_times": audio_features["onset_times"],
         },
         "notes": note_analysis,
+        "analysis_windows": analysis_windows,
         "chords": [
             {
                 "expected": chord,
@@ -112,7 +120,7 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
     }
 
 
-def extract_audio_features(file_path: Path) -> dict[str, float | int]:
+def extract_audio_features(file_path: Path) -> dict[str, Any]:
     y, sample_rate = librosa.load(file_path, sr=None, mono=True)
     if y.size == 0:
         raise ValueError("Uploaded audio file has no readable samples")
@@ -136,10 +144,103 @@ def extract_audio_features(file_path: Path) -> dict[str, float | int]:
         "estimated_tempo_bpm": round(estimated_tempo, 2),
         "onset_count": onset_count,
         "beat_count": beat_count,
+        "onset_times": [
+            round(float(onset_time), 3)
+            for onset_time in librosa.frames_to_time(onset_frames, sr=sample_rate)
+        ],
         "onset_rate_per_second": round(onset_count / duration_seconds, 3)
         if duration_seconds > 0
         else 0.0,
     }
+
+
+def build_analysis_windows(
+    expected_chords: list[str],
+    duration_seconds: float,
+    onset_times: list[float | int],
+    note_events: list[dict[str, Any]],
+    min_window_seconds: float = 1.0,
+) -> list[dict[str, Any]]:
+    if not expected_chords:
+        return []
+
+    starts, trigger = build_window_starts(
+        expected_count=len(expected_chords),
+        duration_seconds=duration_seconds,
+        onset_times=[float(onset_time) for onset_time in onset_times],
+        min_window_seconds=min_window_seconds,
+    )
+    end_boundaries = starts[1:] + [duration_seconds]
+
+    return [
+        {
+            "index": index + 1,
+            "expected_chord": expected_chords[index],
+            "start_seconds": round(start_seconds, 3),
+            "end_seconds": round(max(end_boundaries[index], start_seconds), 3),
+            "trigger": trigger,
+            "detected_tones": collect_pitch_classes_for_window(
+                note_events,
+                start_seconds=start_seconds,
+                end_seconds=end_boundaries[index],
+            ),
+        }
+        for index, start_seconds in enumerate(starts)
+    ]
+
+
+def build_window_starts(
+    expected_count: int,
+    duration_seconds: float,
+    onset_times: list[float],
+    min_window_seconds: float = 1.0,
+) -> tuple[list[float], str]:
+    starts = [0.0]
+
+    for onset_time in sorted(onset_times):
+        if onset_time < 0.05:
+            continue
+        if onset_time - starts[-1] < min_window_seconds:
+            continue
+        starts.append(onset_time)
+        if len(starts) == expected_count:
+            break
+
+    if len(starts) < expected_count:
+        return build_equal_window_starts(expected_count, duration_seconds), "fallback"
+
+    return starts, "onset"
+
+
+def build_equal_window_starts(expected_count: int, duration_seconds: float) -> list[float]:
+    if expected_count <= 0:
+        return []
+
+    window_seconds = duration_seconds / expected_count if duration_seconds > 0 else 0
+    return [round(window_seconds * index, 3) for index in range(expected_count)]
+
+
+def collect_pitch_classes_for_window(
+    note_events: list[dict[str, Any]],
+    start_seconds: float,
+    end_seconds: float,
+) -> list[str]:
+    pitch_classes = {
+        note_event["pitch_class"]
+        for note_event in note_events
+        if note_event_overlaps_window(note_event, start_seconds, end_seconds)
+    }
+    return sorted(pitch_classes)
+
+
+def note_event_overlaps_window(
+    note_event: dict[str, Any],
+    start_seconds: float,
+    end_seconds: float,
+) -> bool:
+    note_start = float(note_event["start_seconds"])
+    note_end = float(note_event["end_seconds"])
+    return note_start < end_seconds and note_end > start_seconds
 
 
 def classify_tempo(audio_features: dict[str, float | int], target_bpm: int) -> str:
@@ -315,6 +416,7 @@ def build_unreadable_audio_analysis(exercise: Exercise, error: str) -> dict[str,
             "pitch_classes": [],
             "count": 0,
         },
+        "analysis_windows": [],
         "chords": [
             {
                 "expected": chord,
