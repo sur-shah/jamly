@@ -26,6 +26,7 @@ The mobile app is not implemented yet.
 - SQLite by default for local development
 - Postgres-ready via `DATABASE_URL`
 - `librosa` and `soundfile` for baseline audio analysis
+- optional Basic Pitch integration for note-event detection
 - Pytest for tests
 - Ruff for linting
 
@@ -78,6 +79,7 @@ app/
   services/
     exercise_generator.py       Rule-based daily exercise generation
     analyzer.py                 Baseline audio analysis and feedback creation
+    note_detector.py            Optional Basic Pitch note-event extraction
 tests/
   test_api_flow.py              End-to-end backend flow test
 ```
@@ -103,7 +105,15 @@ The analyzer currently performs a real baseline pass:
 - estimates tempo
 - counts beats and onsets
 
-It does not yet detect chord tones or individual notes.
+It does not yet compare detected notes to expected chord tones.
+
+When Basic Pitch is installed, the analyzer also returns:
+
+- note event start/end times
+- MIDI note numbers
+- pitch names
+- pitch classes
+- confidence scores
 
 Current analysis modes:
 
@@ -112,9 +122,16 @@ Current analysis modes:
 
 Next intended audio step:
 
-- add Basic Pitch note extraction
-- convert detected MIDI notes to pitch classes
 - compare detected tones with expected chord tones from the exercise
+
+Basic Pitch install note:
+
+```bash
+pip install -e ".[dev,pitch]"
+pip install basic-pitch --no-deps
+```
+
+This avoids the incompatible `tensorflow-macos` dependency path on this Python 3.12 macOS environment and uses the CoreML model path instead.
 
 ## Coding Guidelines
 
@@ -148,6 +165,7 @@ Near-term:
 - keep one FastAPI service
 - keep inline analysis until jobs become slow
 - add Basic Pitch in `app/services/analyzer.py` or a nearby module
+- keep Basic Pitch imports lazy so uploads still work when the optional runtime is missing
 
 Later:
 

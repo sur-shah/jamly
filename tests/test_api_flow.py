@@ -55,12 +55,19 @@ def test_recording_based_practice_flow(tmp_path: Path) -> None:
         assert upload_result["recording"]["status"] == "analyzed"
         assert upload_result["feedback_report"]["analysis"]["mode"] == "audio_features"
         assert upload_result["feedback_report"]["analysis"]["duration_seconds"] > 0
+        assert "notes" in upload_result["feedback_report"]["analysis"]
+        assert upload_result["feedback_report"]["analysis"]["notes"]["status"] in {
+            "analyzed",
+            "unavailable",
+            "failed",
+        }
 
         feedback_response = client.get(f"/practice-sessions/{practice_session_id}/feedback")
         assert feedback_response.status_code == 200
         feedback = feedback_response.json()
         assert len(feedback) == 1
         assert feedback[0]["analysis"]["mode"] == "audio_features"
+        assert "notes" in feedback[0]["analysis"]
 
 
 def build_test_wav() -> bytes:

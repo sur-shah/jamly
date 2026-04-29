@@ -35,3 +35,15 @@ Once running, open:
 ```text
 http://127.0.0.1:8000/docs
 ```
+
+## Optional Basic Pitch Notes
+
+The analyzer can use Spotify Basic Pitch for note-event detection when it is installed.
+On this Mac/Python 3.12 setup, the normal `basic-pitch` dependency install tries to pull an incompatible `tensorflow-macos` version, so use the CoreML runtime workaround:
+
+```bash
+pip install -e ".[dev,pitch]"
+pip install basic-pitch --no-deps
+```
+
+If Basic Pitch is unavailable, uploads still work and `analysis.notes.status` will be `unavailable`.

@@ -15,6 +15,7 @@ from app.models import (
     RecordingStatus,
     SessionStatus,
 )
+from app.services.note_detector import detect_notes
 
 
 def analyze_recording(session: Session, recording: Recording) -> FeedbackReport:
@@ -64,6 +65,7 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
     expected_chords = exercise.target_analysis.get("expected_chords", exercise.chord_progression)
     first_focus = expected_chords[1] if len(expected_chords) > 1 else expected_chords[0]
     tempo_status = classify_tempo(audio_features["estimated_tempo_bpm"], exercise.tempo_bpm)
+    note_analysis = detect_notes(Path(recording.file_path))
     score = score_audio_features(tempo_status, audio_features["onset_count"])
 
     return {
@@ -86,6 +88,7 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
             "beat_count": audio_features["beat_count"],
             "onset_rate_per_second": audio_features["onset_rate_per_second"],
         },
+        "notes": note_analysis,
         "chords": [
             {
                 "expected": chord,
@@ -94,8 +97,18 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
             }
             for chord in expected_chords
         ],
-        "issues": build_audio_feature_issues(first_focus, tempo_status, audio_features),
-        "coach_feedback": build_audio_feature_feedback(exercise, tempo_status, audio_features),
+        "issues": build_audio_feature_issues(
+            first_focus,
+            tempo_status,
+            audio_features,
+            note_analysis,
+        ),
+        "coach_feedback": build_audio_feature_feedback(
+            exercise,
+            tempo_status,
+            audio_features,
+            note_analysis,
+        ),
     }
 
 
@@ -169,6 +182,7 @@ def build_audio_feature_issues(
     first_focus: str,
     tempo_status: str,
     audio_features: dict[str, float | int],
+    note_analysis: dict[str, Any],
 ) -> list[dict[str, str]]:
     issues = [
         {
@@ -200,6 +214,17 @@ def build_audio_feature_issues(
             }
         )
 
+    if note_analysis["status"] != "analyzed":
+        issues.append(
+            {
+                "type": "note_detection",
+                "detail": (
+                    "Basic Pitch note detection did not run successfully. "
+                    f"Status: {note_analysis['status']}."
+                ),
+            }
+        )
+
     return issues
 
 
@@ -207,6 +232,7 @@ def build_audio_feature_feedback(
     exercise: Exercise,
     tempo_status: str,
     audio_features: dict[str, float | int],
+    note_analysis: dict[str, Any],
 ) -> dict[str, str]:
     if tempo_status == "on_target":
         main_fix = "Your tempo is close to the target. Next we need note-level analysis."
@@ -218,10 +244,18 @@ def build_audio_feature_feedback(
             f"against the {exercise.tempo_bpm} BPM target."
         )
 
+    if note_analysis["status"] == "analyzed":
+        note_sentence = (
+            f" Basic Pitch detected {note_analysis['count']} note event"
+            f"{'' if note_analysis['count'] == 1 else 's'}."
+        )
+    else:
+        note_sentence = " Note detection is not available for this take yet."
+
     return {
         "summary": (
             f"Analyzed {audio_features['duration_seconds']} seconds of audio for "
-            f"{exercise.title}."
+            f"{exercise.title}.{note_sentence}"
         ),
         "main_fix": main_fix,
         "practice_tip": (
@@ -248,6 +282,13 @@ def build_unreadable_audio_analysis(exercise: Exercise, error: str) -> dict[str,
             "onset_count": 0,
             "beat_count": 0,
             "onset_rate_per_second": 0,
+        },
+        "notes": {
+            "status": "not_run",
+            "model": "basic_pitch",
+            "note_events": [],
+            "pitch_classes": [],
+            "count": 0,
         },
         "chords": [
             {
