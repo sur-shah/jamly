@@ -1,5 +1,6 @@
 from app.services.analyzer import (
     build_analysis_windows,
+    build_grid_aligned_onset_starts,
     compare_chord_tones,
     compare_window_to_expected_chord,
     build_window_starts,
@@ -72,7 +73,7 @@ def test_build_window_starts_uses_spaced_onsets_when_enough_exist() -> None:
         min_window_seconds=1,
     )
 
-    assert trigger == "onset"
+    assert trigger == "grid_onset"
     assert starts == [0.0, 2.6]
 
 
@@ -118,7 +119,7 @@ def test_build_analysis_windows_assigns_notes_to_expected_chords() -> None:
             "expected_chord": "A",
             "start_seconds": 0.0,
             "end_seconds": 2.6,
-            "trigger": "onset",
+            "trigger": "grid_onset",
             "detected_tones": ["A", "C#", "E"],
         },
         {
@@ -126,10 +127,32 @@ def test_build_analysis_windows_assigns_notes_to_expected_chords() -> None:
             "expected_chord": "D",
             "start_seconds": 2.6,
             "end_seconds": 5,
-            "trigger": "onset",
+            "trigger": "grid_onset",
             "detected_tones": ["D", "F#"],
         },
     ]
+
+
+def test_grid_aligned_onset_starts_prefer_likely_section_boundaries() -> None:
+    starts = build_grid_aligned_onset_starts(
+        expected_count=4,
+        duration_seconds=8.452,
+        onset_times=[0.104, 0.139, 0.987, 1.8, 3.042, 3.866, 4.342, 5.968, 7.291, 8.057],
+        min_window_seconds=1,
+    )
+
+    assert starts == [0.0, 1.8, 4.342, 5.968]
+
+
+def test_grid_aligned_onset_starts_returns_none_when_boundaries_are_missing() -> None:
+    starts = build_grid_aligned_onset_starts(
+        expected_count=4,
+        duration_seconds=8,
+        onset_times=[0.1, 0.3],
+        min_window_seconds=1,
+    )
+
+    assert starts is None
 
 
 def test_compare_window_to_expected_chord_marks_match() -> None:

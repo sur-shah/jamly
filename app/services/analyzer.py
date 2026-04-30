@@ -196,6 +196,64 @@ def build_window_starts(
     onset_times: list[float],
     min_window_seconds: float = 1.0,
 ) -> tuple[list[float], str]:
+    if expected_count <= 0:
+        return [], "fallback"
+    if expected_count == 1:
+        return [0.0], "single"
+
+    grid_starts = build_grid_aligned_onset_starts(
+        expected_count=expected_count,
+        duration_seconds=duration_seconds,
+        onset_times=onset_times,
+        min_window_seconds=min_window_seconds,
+    )
+    if grid_starts is not None:
+        return grid_starts, "grid_onset"
+
+    return build_first_spaced_onset_starts(
+        expected_count=expected_count,
+        duration_seconds=duration_seconds,
+        onset_times=onset_times,
+        min_window_seconds=min_window_seconds,
+    )
+
+
+def build_grid_aligned_onset_starts(
+    expected_count: int,
+    duration_seconds: float,
+    onset_times: list[float],
+    min_window_seconds: float = 1.0,
+) -> list[float] | None:
+    if duration_seconds <= 0:
+        return None
+
+    section_seconds = duration_seconds / expected_count
+    search_radius = max(section_seconds * 0.45, min_window_seconds)
+    usable_onsets = sorted(onset for onset in onset_times if onset >= 0.05)
+    starts = [0.0]
+
+    for boundary_index in range(1, expected_count):
+        target = section_seconds * boundary_index
+        candidates = [
+            onset
+            for onset in usable_onsets
+            if abs(onset - target) <= search_radius
+            and onset - starts[-1] >= min_window_seconds
+        ]
+        if not candidates:
+            return None
+
+        starts.append(min(candidates, key=lambda onset: abs(onset - target)))
+
+    return starts
+
+
+def build_first_spaced_onset_starts(
+    expected_count: int,
+    duration_seconds: float,
+    onset_times: list[float],
+    min_window_seconds: float = 1.0,
+) -> tuple[list[float], str]:
     starts = [0.0]
 
     for onset_time in sorted(onset_times):
