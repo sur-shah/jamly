@@ -11,6 +11,7 @@ Current backend capabilities:
 - create users
 - store user practice preferences
 - generate daily genre/instrument exercises
+- create custom chord-progression exercises
 - create practice sessions
 - upload audio recordings
 - run baseline audio analysis with `librosa`
@@ -80,6 +81,7 @@ app/
     exercise_generator.py       Rule-based daily exercise generation
     analyzer.py                 Baseline audio analysis and feedback creation
     note_detector.py            Optional Basic Pitch note-event extraction
+    music_theory.py             Chord parsing and required-tone generation
 tests/
   test_api_flow.py              End-to-end backend flow test
 ```
@@ -95,6 +97,8 @@ Use this sequence when manually testing in Swagger:
 5. `POST /practice-sessions/{practice_session_id}/recordings`
 6. `GET /practice-sessions/{practice_session_id}/feedback`
 
+For custom progression tests, use `POST /exercises/custom` instead of the daily exercise endpoint, then fetch the newest result with `GET /practice-sessions/{practice_session_id}/feedback/latest`.
+
 ## Audio Analysis Status
 
 The analyzer currently performs a real baseline pass:
@@ -105,8 +109,6 @@ The analyzer currently performs a real baseline pass:
 - estimates tempo
 - counts beats and onsets
 - marks tempo as `insufficient_rhythm` when a clip is too short or sparse for reliable timing feedback
-
-It does not yet compare detected notes to expected chord tones.
 
 When Basic Pitch is installed, the analyzer also returns:
 

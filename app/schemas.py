@@ -87,6 +87,38 @@ class ExerciseRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CustomExerciseCreate(BaseModel):
+    user_id: int = Field(description="The id returned by POST /users.")
+    title: str = Field(examples=["Four Chord Guitar Progression"])
+    instrument: Instrument = Instrument.guitar
+    genre: Genre = Genre.pop
+    level: SkillLevel = SkillLevel.beginner
+    focus: PracticeFocus = PracticeFocus.chords
+    key: str = Field(default="G", examples=["G"])
+    tempo_bpm: int = Field(default=80, ge=30, le=240)
+    chord_progression: list[str] = Field(
+        min_length=1,
+        examples=[["Em", "C", "G", "D"]],
+    )
+    steps: list[dict[str, Any]] | None = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "user_id": 1,
+                "title": "Four Chord Guitar Progression",
+                "instrument": "guitar",
+                "genre": "pop",
+                "level": "beginner",
+                "focus": "chords",
+                "key": "G",
+                "tempo_bpm": 80,
+                "chord_progression": ["Em", "C", "G", "D"],
+            }
+        }
+    )
+
+
 class PracticeSessionCreate(BaseModel):
     user_id: int = Field(description="The id returned by POST /users.")
     exercise_id: int = Field(description="The id returned by POST /exercises/daily.")

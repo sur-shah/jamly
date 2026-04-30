@@ -69,6 +69,47 @@ def test_recording_based_practice_flow(tmp_path: Path) -> None:
         assert feedback[0]["analysis"]["mode"] == "audio_features"
         assert "notes" in feedback[0]["analysis"]
 
+        latest_feedback_response = client.get(
+            f"/practice-sessions/{practice_session_id}/feedback/latest"
+        )
+        assert latest_feedback_response.status_code == 200
+        assert latest_feedback_response.json()["id"] == feedback[0]["id"]
+
+
+def test_custom_exercise_flow() -> None:
+    with TestClient(app) as client:
+        user_response = client.post(
+            "/users",
+            json={"display_name": "Custom Tester", "email": "custom@example.com"},
+        )
+        assert user_response.status_code == 201
+        user_id = user_response.json()["id"]
+
+        exercise_response = client.post(
+            "/exercises/custom",
+            json={
+                "user_id": user_id,
+                "title": "Four Chord Guitar Progression",
+                "instrument": "guitar",
+                "genre": "pop",
+                "level": "beginner",
+                "focus": "chords",
+                "key": "G",
+                "tempo_bpm": 80,
+                "chord_progression": ["Em", "C", "G", "D"],
+            },
+        )
+
+        assert exercise_response.status_code == 201
+        exercise = exercise_response.json()
+        assert exercise["chord_progression"] == ["Em", "C", "G", "D"]
+        assert exercise["target_analysis"]["required_tones"] == {
+            "Em": ["E", "G", "B"],
+            "C": ["C", "E", "G"],
+            "G": ["G", "B", "D"],
+            "D": ["D", "F#", "A"],
+        }
+
 
 def build_test_wav() -> bytes:
     sample_rate = 16_000

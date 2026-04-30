@@ -6,9 +6,10 @@ Current MVP slice:
 
 - user profile and music preferences
 - daily exercise generation
+- custom exercise creation
 - practice session creation
 - audio recording upload
-- placeholder recording analysis
+- audio feature, note, window, and chord-tone analysis
 - feedback report retrieval
 
 ## Local Setup
@@ -34,6 +35,16 @@ Once running, open:
 
 ```text
 http://127.0.0.1:8000/docs
+```
+
+Useful Swagger flow for testing a custom progression:
+
+```text
+POST /users
+POST /exercises/custom
+POST /practice-sessions
+POST /practice-sessions/{practice_session_id}/recordings
+GET /practice-sessions/{practice_session_id}/feedback/latest
 ```
 
 ## Optional Basic Pitch Notes

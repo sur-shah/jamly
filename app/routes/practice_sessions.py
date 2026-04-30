@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlmodel import Session, select
+from sqlmodel import Session, desc, select
 
 from app.config import get_settings
 from app.database import get_session
@@ -101,3 +101,24 @@ def get_feedback_reports(
     return session.exec(
         select(FeedbackReport).where(FeedbackReport.practice_session_id == practice_session_id)
     ).all()
+
+
+@router.get("/{practice_session_id}/feedback/latest", response_model=FeedbackReportRead)
+def get_latest_feedback_report(
+    practice_session_id: int, session: Session = Depends(get_session)
+) -> FeedbackReport:
+    practice_session = session.get(PracticeSession, practice_session_id)
+    if practice_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Practice session not found"
+        )
+
+    feedback_report = session.exec(
+        select(FeedbackReport)
+        .where(FeedbackReport.practice_session_id == practice_session_id)
+        .order_by(desc(FeedbackReport.created_at))
+    ).first()
+    if feedback_report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Feedback not found")
+
+    return feedback_report
