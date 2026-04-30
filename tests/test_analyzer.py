@@ -1,5 +1,7 @@
 from app.services.analyzer import (
     build_analysis_windows,
+    compare_chord_tones,
+    compare_window_to_expected_chord,
     build_window_starts,
     classify_tempo,
     collect_pitch_classes_for_window,
@@ -128,3 +130,64 @@ def test_build_analysis_windows_assigns_notes_to_expected_chords() -> None:
             "detected_tones": ["D", "F#"],
         },
     ]
+
+
+def test_compare_window_to_expected_chord_marks_match() -> None:
+    comparison = compare_window_to_expected_chord(
+        {
+            "index": 1,
+            "expected_chord": "Em",
+            "start_seconds": 0,
+            "end_seconds": 2,
+            "detected_tones": ["B", "E", "G"],
+        },
+        {"Em": ["E", "G", "B"]},
+    )
+
+    assert comparison == {
+        "index": 1,
+        "expected": "Em",
+        "start_seconds": 0,
+        "end_seconds": 2,
+        "required_tones": ["E", "G", "B"],
+        "detected_tones": ["B", "E", "G"],
+        "missing_tones": [],
+        "extra_tones": [],
+        "match_ratio": 1.0,
+        "status": "matched",
+    }
+
+
+def test_compare_window_to_expected_chord_marks_missing_tones() -> None:
+    comparison = compare_window_to_expected_chord(
+        {
+            "index": 1,
+            "expected_chord": "A7",
+            "start_seconds": 0,
+            "end_seconds": 2,
+            "detected_tones": ["A", "C#", "E"],
+        },
+        {"A7": ["A", "C#", "E", "G"]},
+    )
+
+    assert comparison["missing_tones"] == ["G"]
+    assert comparison["match_ratio"] == 0.75
+    assert comparison["status"] == "incomplete"
+
+
+def test_compare_chord_tones_handles_unknown_chords() -> None:
+    comparisons = compare_chord_tones(
+        [
+            {
+                "index": 1,
+                "expected_chord": "Mystery",
+                "start_seconds": 0,
+                "end_seconds": 2,
+                "detected_tones": ["A"],
+            }
+        ],
+        {},
+    )
+
+    assert comparisons[0]["required_tones"] == []
+    assert comparisons[0]["status"] == "unknown_chord"

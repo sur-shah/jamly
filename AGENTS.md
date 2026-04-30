@@ -123,6 +123,7 @@ The analyzer also creates `analysis_windows`:
 - equal-length fallback windows are used when onset data is too sparse/noisy
 - note events are assigned to windows by time overlap
 - arpeggios work because tones can appear anywhere inside the same window
+- expected chord tones are compared against detected tones per window
 
 Current analysis modes:
 
@@ -131,7 +132,8 @@ Current analysis modes:
 
 Next intended audio step:
 
-- compare detected tones with expected chord tones from the exercise
+- improve chord-change segmentation so repeated strums are not treated as chord changes
+- add richer chord scoring with duration/confidence weighting
 
 Basic Pitch install note:
 

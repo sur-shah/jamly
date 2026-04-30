@@ -63,7 +63,6 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
         return build_unreadable_audio_analysis(exercise, str(exc))
 
     expected_chords = exercise.target_analysis.get("expected_chords", exercise.chord_progression)
-    first_focus = expected_chords[1] if len(expected_chords) > 1 else expected_chords[0]
     tempo_status = classify_tempo(audio_features, exercise.tempo_bpm)
     note_analysis = detect_notes(Path(recording.file_path))
     analysis_windows = build_analysis_windows(
@@ -72,7 +71,15 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
         onset_times=audio_features["onset_times"],
         note_events=note_analysis.get("note_events", []),
     )
-    score = score_audio_features(tempo_status, audio_features["onset_count"])
+    chord_analysis = compare_chord_tones(
+        analysis_windows=analysis_windows,
+        required_tones=exercise.target_analysis.get("required_tones", {}),
+    )
+    score = score_audio_features(
+        tempo_status,
+        audio_features["onset_count"],
+        chord_analysis=chord_analysis,
+    )
 
     return {
         "mode": "audio_features",
@@ -97,25 +104,19 @@ def build_audio_feature_analysis(exercise: Exercise, recording: Recording) -> di
         },
         "notes": note_analysis,
         "analysis_windows": analysis_windows,
-        "chords": [
-            {
-                "expected": chord,
-                "detected": None,
-                "status": "not_analyzed_yet",
-            }
-            for chord in expected_chords
-        ],
+        "chords": chord_analysis,
         "issues": build_audio_feature_issues(
-            first_focus,
             tempo_status,
             audio_features,
             note_analysis,
+            chord_analysis,
         ),
         "coach_feedback": build_audio_feature_feedback(
             exercise,
             tempo_status,
             audio_features,
             note_analysis,
+            chord_analysis,
         ),
     }
 
@@ -243,6 +244,58 @@ def note_event_overlaps_window(
     return note_start < end_seconds and note_end > start_seconds
 
 
+def compare_chord_tones(
+    analysis_windows: list[dict[str, Any]],
+    required_tones: dict[str, list[str]],
+) -> list[dict[str, Any]]:
+    return [
+        compare_window_to_expected_chord(window, required_tones)
+        for window in analysis_windows
+    ]
+
+
+def compare_window_to_expected_chord(
+    window: dict[str, Any],
+    required_tones: dict[str, list[str]],
+) -> dict[str, Any]:
+    expected_chord = window["expected_chord"]
+    required = required_tones.get(expected_chord, [])
+    detected = window.get("detected_tones", [])
+    missing = [tone for tone in required if tone not in detected]
+    extra = [tone for tone in detected if tone not in required]
+    matched_count = len(required) - len(missing)
+    match_ratio = round(matched_count / len(required), 3) if required else 0.0
+
+    return {
+        "index": window["index"],
+        "expected": expected_chord,
+        "start_seconds": window["start_seconds"],
+        "end_seconds": window["end_seconds"],
+        "required_tones": required,
+        "detected_tones": detected,
+        "missing_tones": missing,
+        "extra_tones": extra,
+        "match_ratio": match_ratio,
+        "status": classify_chord_match(required, detected, missing),
+    }
+
+
+def classify_chord_match(
+    required_tones: list[str],
+    detected_tones: list[str],
+    missing_tones: list[str],
+) -> str:
+    if not required_tones:
+        return "unknown_chord"
+    if not detected_tones:
+        return "not_detected"
+    if not missing_tones:
+        return "matched"
+    if len(missing_tones) == len(required_tones):
+        return "not_detected"
+    return "incomplete"
+
+
 def classify_tempo(audio_features: dict[str, float | int], target_bpm: int) -> str:
     estimated_bpm = float(audio_features["estimated_tempo_bpm"])
     duration_seconds = float(audio_features["duration_seconds"])
@@ -267,7 +320,11 @@ def classify_tempo(audio_features: dict[str, float | int], target_bpm: int) -> s
     return "slightly_fast"
 
 
-def score_audio_features(tempo_status: str, onset_count: int) -> int:
+def score_audio_features(
+    tempo_status: str,
+    onset_count: int,
+    chord_analysis: list[dict[str, Any]] | None = None,
+) -> int:
     score = 80
     tempo_penalties = {
         "on_target": 0,
@@ -285,25 +342,24 @@ def score_audio_features(tempo_status: str, onset_count: int) -> int:
     elif onset_count < 4:
         score -= 8
 
+    if chord_analysis:
+        average_match = sum(chord["match_ratio"] for chord in chord_analysis) / len(chord_analysis)
+        score += round((average_match - 0.75) * 20)
+
     return max(0, min(100, score))
 
 
 def build_audio_feature_issues(
-    first_focus: str,
     tempo_status: str,
     audio_features: dict[str, float | int],
     note_analysis: dict[str, Any],
+    chord_analysis: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
-    issues = [
-        {
-            "type": "chord_quality",
-            "chord": first_focus,
-            "detail": (
-                "Chord-note detection is not enabled yet. This baseline only checks audio "
-                "duration, tempo, beats, and note/chord attack activity."
-            ),
-        }
-    ]
+    issues = []
+
+    chord_issue = build_chord_issue(chord_analysis)
+    if chord_issue is not None:
+        issues.append(chord_issue)
 
     if tempo_status != "on_target":
         if tempo_status == "insufficient_rhythm":
@@ -340,24 +396,37 @@ def build_audio_feature_issues(
     return issues
 
 
+def build_chord_issue(chord_analysis: list[dict[str, Any]]) -> dict[str, str] | None:
+    problem_chords = [
+        chord for chord in chord_analysis
+        if chord["status"] in {"incomplete", "not_detected", "unknown_chord"}
+    ]
+    if not problem_chords:
+        return None
+
+    chord = min(problem_chords, key=lambda item: item["match_ratio"])
+    if chord["status"] == "unknown_chord":
+        detail = f"Jamly does not know the required tones for {chord['expected']} yet."
+    elif chord["missing_tones"]:
+        missing = ", ".join(chord["missing_tones"])
+        detail = f"{chord['expected']} is missing or underplaying: {missing}."
+    else:
+        detail = f"{chord['expected']} was not detected clearly in its window."
+
+    return {
+        "type": "chord_quality",
+        "chord": chord["expected"],
+        "detail": detail,
+    }
+
+
 def build_audio_feature_feedback(
     exercise: Exercise,
     tempo_status: str,
     audio_features: dict[str, float | int],
     note_analysis: dict[str, Any],
+    chord_analysis: list[dict[str, Any]],
 ) -> dict[str, str]:
-    if tempo_status == "on_target":
-        main_fix = "Your tempo is close to the target. Next we need note-level analysis."
-    elif tempo_status == "insufficient_rhythm":
-        main_fix = "This clip is too short or sparse to judge tempo reliably."
-    elif tempo_status == "unknown":
-        main_fix = "The analyzer could not estimate a stable tempo from this recording."
-    else:
-        main_fix = (
-            f"Your estimated tempo is {audio_features['estimated_tempo_bpm']} BPM "
-            f"against the {exercise.tempo_bpm} BPM target."
-        )
-
     if note_analysis["status"] == "analyzed":
         note_sentence = (
             f" Basic Pitch detected {note_analysis['count']} note event"
@@ -371,14 +440,48 @@ def build_audio_feature_feedback(
             f"Analyzed {audio_features['duration_seconds']} seconds of audio for "
             f"{exercise.title}.{note_sentence}"
         ),
-        "main_fix": main_fix,
+        "main_fix": build_main_fix(exercise, tempo_status, audio_features, chord_analysis),
         "practice_tip": (
-            build_practice_tip(exercise, tempo_status)
+            build_practice_tip(exercise, tempo_status, chord_analysis)
         ),
     }
 
 
-def build_practice_tip(exercise: Exercise, tempo_status: str) -> str:
+def build_main_fix(
+    exercise: Exercise,
+    tempo_status: str,
+    audio_features: dict[str, float | int],
+    chord_analysis: list[dict[str, Any]],
+) -> str:
+    chord_issue = build_chord_issue(chord_analysis)
+    if chord_issue is not None:
+        return chord_issue["detail"]
+
+    if tempo_status == "on_target":
+        return "Your chord tones and tempo are close to the target."
+    if tempo_status == "insufficient_rhythm":
+        return "The chord tones look close, but this clip is too short or sparse to judge tempo."
+    if tempo_status == "unknown":
+        return "The chord tones look close, but the analyzer could not estimate a stable tempo."
+
+    return (
+        f"Your estimated tempo is {audio_features['estimated_tempo_bpm']} BPM "
+        f"against the {exercise.tempo_bpm} BPM target."
+    )
+
+
+def build_practice_tip(
+    exercise: Exercise,
+    tempo_status: str,
+    chord_analysis: list[dict[str, Any]],
+) -> str:
+    chord_issue = build_chord_issue(chord_analysis)
+    if chord_issue is not None:
+        return (
+            "Slow the progression down and make sure each missing tone rings inside its "
+            "chord window before moving on."
+        )
+
     if tempo_status == "insufficient_rhythm":
         return (
             "Record the full progression with at least four steady strums or note attacks "
@@ -434,8 +537,8 @@ def build_unreadable_audio_analysis(exercise: Exercise, error: str) -> dict[str,
                 "type": "chord_quality",
                 "chord": first_focus,
                 "detail": (
-                    "Chord-note detection has not been enabled yet. Upload a valid WAV, MP3, "
-                    "M4A, or other librosa-readable audio file for baseline timing analysis."
+                    "Upload a valid WAV, MP3, M4A, or other librosa-readable audio file "
+                    "for baseline timing and chord-tone analysis."
                 ),
             },
         ],
