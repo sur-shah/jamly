@@ -164,8 +164,8 @@ class FeedbackReportRead(BaseModel):
 
 class RecordingUploadRead(BaseModel):
     recording: RecordingRead
-    feedback_report: FeedbackReportRead
-    message: str = "Recording uploaded and analyzed."
+    feedback_report: FeedbackReportRead | None = None
+    message: str = "Recording uploaded."
 
 
 class PracticeSessionSummaryRead(BaseModel):

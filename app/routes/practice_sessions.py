@@ -6,7 +6,15 @@ from sqlmodel import Session, desc, select
 
 from app.config import get_settings
 from app.database import get_session
-from app.models import Exercise, FeedbackReport, PracticeSession, Recording, SessionStatus, User
+from app.models import (
+    Exercise,
+    FeedbackReport,
+    PracticeSession,
+    Recording,
+    RecordingStatus,
+    SessionStatus,
+    User,
+)
 from app.schemas import (
     FeedbackReportRead,
     PracticeSessionCreate,
@@ -82,10 +90,58 @@ async def upload_recording(
     session.commit()
     session.refresh(recording)
 
+    return RecordingUploadRead(
+        recording=recording,
+        feedback_report=None,
+        message="Recording uploaded. Run analysis when you are ready.",
+    )
+
+
+@router.post(
+    "/{practice_session_id}/recordings/{recording_id}/analyze",
+    response_model=RecordingUploadRead,
+)
+def analyze_uploaded_recording(
+    practice_session_id: int,
+    recording_id: int,
+    session: Session = Depends(get_session),
+) -> RecordingUploadRead:
+    practice_session = session.get(PracticeSession, practice_session_id)
+    if practice_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Practice session not found"
+        )
+
+    recording = session.get(Recording, recording_id)
+    if recording is None or recording.practice_session_id != practice_session_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recording not found")
+
+    if recording.status == RecordingStatus.analyzed:
+        existing = session.exec(
+            select(FeedbackReport)
+            .where(FeedbackReport.recording_id == recording_id)
+            .order_by(desc(FeedbackReport.created_at))
+        ).first()
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Recording marked analyzed but no feedback report exists",
+            )
+        session.refresh(recording)
+        return RecordingUploadRead(
+            recording=recording,
+            feedback_report=existing,
+            message="Recording was already analyzed.",
+        )
+
     feedback_report = analyze_recording(session, recording)
     session.refresh(recording)
 
-    return RecordingUploadRead(recording=recording, feedback_report=feedback_report)
+    return RecordingUploadRead(
+        recording=recording,
+        feedback_report=feedback_report,
+        message="Recording analyzed.",
+    )
 
 
 @router.get("/{practice_session_id}/feedback", response_model=list[FeedbackReportRead])

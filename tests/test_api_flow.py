@@ -52,11 +52,20 @@ def test_recording_based_practice_flow(tmp_path: Path) -> None:
         )
         assert recording_response.status_code == 200
         upload_result = recording_response.json()
-        assert upload_result["recording"]["status"] == "analyzed"
-        assert upload_result["feedback_report"]["analysis"]["mode"] == "audio_features"
-        assert upload_result["feedback_report"]["analysis"]["duration_seconds"] > 0
-        assert "notes" in upload_result["feedback_report"]["analysis"]
-        assert upload_result["feedback_report"]["analysis"]["notes"]["status"] in {
+        assert upload_result["recording"]["status"] == "uploaded"
+        assert upload_result["feedback_report"] is None
+        recording_id = upload_result["recording"]["id"]
+
+        analyze_response = client.post(
+            f"/practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze",
+        )
+        assert analyze_response.status_code == 200
+        analyzed = analyze_response.json()
+        assert analyzed["recording"]["status"] == "analyzed"
+        assert analyzed["feedback_report"]["analysis"]["mode"] == "audio_features"
+        assert analyzed["feedback_report"]["analysis"]["duration_seconds"] > 0
+        assert "notes" in analyzed["feedback_report"]["analysis"]
+        assert analyzed["feedback_report"]["analysis"]["notes"]["status"] in {
             "analyzed",
             "unavailable",
             "failed",
