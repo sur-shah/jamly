@@ -95,21 +95,21 @@ The mobile MVP flow matches the API: create a **custom exercise**, create a **pr
 
 ## How the recording and analysis API works
 
-Upload and analysis are **intentionally separate**:
+Upload triggers analysis immediately — there is no separate analyze step:
 
 | Step | Method | Purpose |
-|------|--------|--------|
-| Store file | `POST /practice-sessions/{practice_session_id}/recordings` | Accepts multipart `file`; returns `recording` with status `uploaded` and `feedback_report: null`. |
-| Run analyzer | `POST /practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze` | Runs analysis for that recording; returns `recording` (status `analyzed`) and a populated `feedback_report`. If already analyzed, returns the existing report. |
+|------|--------|---------|
+| Upload + analyze | `POST /practice-sessions/{practice_session_id}/recordings` | Accepts multipart `file`; runs analysis inline; returns `recording` (status `analyzed`) and a populated `feedback_report`. |
 | List reports | `GET /practice-sessions/{practice_session_id}/feedback` | All feedback rows for the session. |
-| Latest report | `GET /practice-sessions/{practice_session_id}/feedback/latest` | Most recent report (useful after analysis). |
+| Latest report | `GET /practice-sessions/{practice_session_id}/feedback/latest` | Most recent report. |
 
-
-image.png
 Other useful endpoints:
 
 - **`POST /practice-sessions`** — Body: `user_id`, `exercise_id`.
-- **`GET /users/{user_id}/practice-sessions`**, **`/feedback-reports`**, **`/practice-stats`** — History and aggregates.
+- **`GET /practice-sessions/{practice_session_id}`** — Session status and metadata.
+
+> **Note — no authentication yet.** All endpoints are open. User ownership is enforced only for exercise creation (an exercise must belong to the requesting user). Adding token-based auth is a planned next step.
+
 
 ### Swagger sequence (daily exercise path)
 
@@ -119,9 +119,8 @@ Use this order in `/docs`:
 2. `PUT /users/{user_id}/preferences`
 3. `POST /exercises/daily?user_id={user_id}`
 4. `POST /practice-sessions` with `user_id` and `exercise_id`
-5. `POST /practice-sessions/{practice_session_id}/recordings` — upload audio
-6. `POST /practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze` — use `recording.id` from step 5
-7. `GET /practice-sessions/{practice_session_id}/feedback/latest` — confirm persisted report
+5. `POST /practice-sessions/{practice_session_id}/recordings` — upload audio; analysis runs immediately and the response includes the feedback report
+6. `GET /practice-sessions/{practice_session_id}/feedback/latest` — confirm persisted report
 
 Example:
 <img width="760" height="1026" alt="image" src="https://github.com/user-attachments/assets/7d0b91c8-d033-45e4-92b8-ff45abec9232" />
@@ -159,3 +158,9 @@ If Basic Pitch fails to load, uploads and analysis remain usable; expect `analys
 - **`app/services/music_theory.py`** — Chord parsing and tone expectations.
 
 This README describes the MVP as implemented in code; behaviour may evolve as Jamly grows.
+
+---
+
+## Development
+
+Built with [Claude Code](https://claude.ai/code) and [OpenAI Codex](https://openai.com/index/openai-codex/) as AI coding assistants throughout development.
