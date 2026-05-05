@@ -4,7 +4,7 @@ Jamly is a **music practice assistant** for structured exercises and **quantitat
 
 This repository is an **MVP**: a **FastAPI** service that owns users, exercises, sessions, file storage, analysis, and persisted reports, plus a small **Expo (React Native)** app in `mobile/` that exercises the same HTTP API.
 
-## What Jamly does today
+## What Jamly does 
 
 1. **Identity and preferences** — Create a user and store practice preferences (instrument, genre, skill level, focus, and similar fields). These influence how exercises are chosen or generated.
 2. **Exercises** — Generate a **daily** exercise from preferences, or define a **custom** chord progression with metadata (key, tempo, title). The backend stores the exercise and expected harmony (e.g. required chord tones) for later comparison.
@@ -103,6 +103,9 @@ Upload and analysis are **intentionally separate**:
 | Run analyzer | `POST /practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze` | Runs analysis for that recording; returns `recording` (status `analyzed`) and a populated `feedback_report`. If already analyzed, returns the existing report. |
 | List reports | `GET /practice-sessions/{practice_session_id}/feedback` | All feedback rows for the session. |
 | Latest report | `GET /practice-sessions/{practice_session_id}/feedback/latest` | Most recent report (useful after analysis). |
+
+<img width="736" height="1026" alt="image" src="https://github.com/user-attachments/assets/937d4285-ae3a-479c-9de5-237b1b2bb52c" />
+
 
 Other useful endpoints:
 
