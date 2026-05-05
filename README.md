@@ -1,60 +1,155 @@
-# Jamly Backend
+# Jamly
 
-FastAPI backend for the Jamly AI music practice assistant.
+Jamly is a **music practice assistant** for structured exercises and **quantitative audio feedback**. A learner (or a prototype app acting on their behalf) defines who they are and what they practice, receives a generated exercise, records a take, and receives a **feedback report** derived from signal processing on that recording—not from a live tutor in the room.
 
-Current MVP slice:
+This repository is an **MVP**: a **FastAPI** service that owns users, exercises, sessions, file storage, analysis, and persisted reports, plus a small **Expo (React Native)** app in `mobile/` that exercises the same HTTP API.
 
-- user profile and music preferences
-- daily exercise generation
-- custom exercise creation
-- practice session creation
-- audio recording upload
-- audio feature, note, window, and chord-tone analysis
-- feedback report retrieval
+## What Jamly does today
 
-## Local Setup
+1. **Identity and preferences** — Create a user and store practice preferences (instrument, genre, skill level, focus, and similar fields). These influence how exercises are chosen or generated.
+2. **Exercises** — Generate a **daily** exercise from preferences, or define a **custom** chord progression with metadata (key, tempo, title). The backend stores the exercise and expected harmony (e.g. required chord tones) for later comparison.
+3. **Practice sessions** — Open a session that links a user to a single exercise attempt. A session tracks status from “planned” through upload and analysis to completion.
+4. **Recordings** — Upload an audio (or container) file for that session. The file is stored on disk; the recording row is marked **uploaded**.
+5. **Analysis** — Trigger analysis in a **separate step**. The backend decodes the clip, runs **librosa-based** feature extraction (duration, sample rate, tempo-related features, onsets, rhythm sufficiency flags), optionally enriches with **note events** when Basic Pitch is installed, compares windows to the exercise’s expected chords, computes a score, and saves a **feedback report** (coach-style summary, main fix, tip, and structured `analysis` JSON).
+6. **Reading results** — List feedback for a session or fetch the latest report; the mobile app displays score, text, and chord-level detail when present.
+
+In short: **Jamly turns an uploaded take plus an exercise definition into a saved, queryable coaching report.**
+
+## Repository layout
+
+This directory (the backend **project root**, next to `pyproject.toml`) contains:
+
+```text
+.
+  app/                 # FastAPI routes, models, analyzer services
+  tests/               # Pytest, including end-to-end API flow
+  mobile/              # Expo app (npm) — calls the backend over HTTP
+```
+
+Run Python commands from **this** directory and app commands from **`mobile/`** unless noted otherwise.
+
+## Requirements
+
+- **Python** 3.11+ (see `pyproject.toml` for project metadata)
+- **Node.js** and npm (for `mobile/`)
+- Xcode / Android Studio or **Expo Go** on a device, if you run the mobile UI
+
+## Run the backend
+
+From the **project root** (the directory that contains `pyproject.toml`):
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-By default the app uses local SQLite at `jamly.db` and local uploaded files in `uploads/`.
-Set `DATABASE_URL` to Postgres later, for example:
+Defaults:
+
+- **Database:** SQLite file `jamly.db` in the current working directory
+- **Uploads:** directory `uploads/` for stored recording files
+
+**Optional Postgres** — set `DATABASE_URL`, for example:
 
 ```bash
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/jamly
+export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/jamly
 ```
 
-## API Docs
-
-Once running, open:
+**Docs** — interactive OpenAPI UI:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-Useful Swagger flow for testing a custom progression:
+For **physical phones or some emulators**, the backend must listen on every interface so the device can reach your machine:
 
-```text
-POST /users
-POST /exercises/custom
-POST /practice-sessions
-POST /practice-sessions/{practice_session_id}/recordings
-GET /practice-sessions/{practice_session_id}/feedback/latest
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Optional Basic Pitch Notes
+## Run the mobile app
 
-The analyzer can use Spotify Basic Pitch for note-event detection when it is installed.
-On this Mac/Python 3.12 setup, the normal `basic-pitch` dependency install tries to pull an incompatible `tensorflow-macos` version, so use the CoreML runtime workaround:
+See **`mobile/README.md`** for emulator-specific URLs. Typical flow:
+
+```bash
+cd mobile
+npm install
+npm run start
+```
+
+Point the app at your API:
+
+- **Simulator on the same computer** — Often `http://127.0.0.1:8000` (configured via `EXPO_PUBLIC_API_URL` or the default in the app source).
+- **Android emulator** — Use `http://10.0.2.2:8000`.
+- **Physical device** — Use your laptop’s LAN IP, e.g. `http://192.168.1.20:8000`, with the server on `0.0.0.0`.
+
+Example:
+
+```bash
+EXPO_PUBLIC_API_URL=http://YOUR_IP:8000 npm run start
+```
+
+The mobile MVP flow matches the API: create a **custom exercise**, create a **practice session**, **upload** a take, tap **analyze**, then read the feedback card.
+
+## How the recording and analysis API works
+
+Upload and analysis are **intentionally separate**:
+
+| Step | Method | Purpose |
+|------|--------|--------|
+| Store file | `POST /practice-sessions/{practice_session_id}/recordings` | Accepts multipart `file`; returns `recording` with status `uploaded` and `feedback_report: null`. |
+| Run analyzer | `POST /practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze` | Runs analysis for that recording; returns `recording` (status `analyzed`) and a populated `feedback_report`. If already analyzed, returns the existing report. |
+| List reports | `GET /practice-sessions/{practice_session_id}/feedback` | All feedback rows for the session. |
+| Latest report | `GET /practice-sessions/{practice_session_id}/feedback/latest` | Most recent report (useful after analysis). |
+
+
+image.png
+Other useful endpoints:
+
+- **`POST /practice-sessions`** — Body: `user_id`, `exercise_id`.
+- **`GET /users/{user_id}/practice-sessions`**, **`/feedback-reports`**, **`/practice-stats`** — History and aggregates.
+
+### Swagger sequence (daily exercise path)
+
+Use this order in `/docs`:
+
+1. `POST /users`
+2. `PUT /users/{user_id}/preferences`
+3. `POST /exercises/daily?user_id={user_id}`
+4. `POST /practice-sessions` with `user_id` and `exercise_id`
+5. `POST /practice-sessions/{practice_session_id}/recordings` — upload audio
+6. `POST /practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze` — use `recording.id` from step 5
+7. `GET /practice-sessions/{practice_session_id}/feedback/latest` — confirm persisted report
+
+For a **custom** progression, call `POST /exercises/custom` instead of `/exercises/daily`, then continue from step 4.
+
+## Tests and lint
+
+```bash
+pytest
+ruff check .
+```
+
+## Optional: richer note detection (Basic Pitch)
+
+The analyzer can attach note-level data when **[Basic Pitch](https://github.com/spotify/basic-pitch)** is available. Without it, analysis still succeeds; note fields indicate unavailability.
+
+On some macOS/Python stacks, pulling `basic-pitch` without care can conflict with TensorFlow variants. One workable approach documented in-repo:
 
 ```bash
 pip install -e ".[dev,pitch]"
 pip install basic-pitch --no-deps
 ```
 
-If Basic Pitch is unavailable, uploads still work and `analysis.notes.status` will be `unavailable`.
+If Basic Pitch fails to load, uploads and analysis remain usable; expect `analysis.notes.status` such as `unavailable` rather than full note events.
+
+## Where logic lives
+
+- **`app/services/exercise_generator.py`** — Rule-based daily exercise generation.
+- **`app/services/analyzer.py`** — Audio features, scoring, chord-window comparison, feedback text construction.
+- **`app/services/note_detector.py`** — Optional Basic Pitch integration.
+- **`app/services/music_theory.py`** — Chord parsing and tone expectations.
+
+This README describes the MVP as implemented in code; behaviour may evolve as Jamly grows.
