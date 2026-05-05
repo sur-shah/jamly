@@ -130,6 +130,21 @@ def test_custom_exercise_flow() -> None:
         }
 
 
+def test_local_frontend_cors_preflight() -> None:
+    with TestClient(app) as client:
+        response = client.options(
+            "/exercises/custom",
+            headers={
+                "Origin": "http://localhost:19006",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:19006"
+
+
 def build_test_wav() -> bytes:
     sample_rate = 16_000
     duration_seconds = 2
