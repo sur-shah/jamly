@@ -47,6 +47,25 @@ POST /practice-sessions/{practice_session_id}/recordings
 GET /practice-sessions/{practice_session_id}/feedback/latest
 ```
 
+## Mobile Frontend
+
+The Expo React Native app lives in `mobile/`. It currently supports the first MVP loop:
+
+- create a custom chord exercise
+- create a practice session
+- upload an audio or video take
+- view score, summary, fixes, tips, and chord-window feedback
+
+Run it with:
+
+```bash
+cd mobile
+npm install
+npm run start
+```
+
+Set `EXPO_PUBLIC_API_URL` when testing from a phone or emulator. See `mobile/README.md`.
+
 ## Optional Basic Pitch Notes
 
 The analyzer can use Spotify Basic Pitch for note-event detection when it is installed.

@@ -4,7 +4,7 @@ This file gives coding agents the local project context they need to work on Jam
 
 ## Project Overview
 
-Jamly is an AI-powered music practice assistant. The current codebase is the backend API for a future mobile app.
+Jamly is an AI-powered music practice assistant. The current codebase has a FastAPI backend API and a first Expo React Native app shell in `mobile/`.
 
 Current backend capabilities:
 
@@ -17,7 +17,7 @@ Current backend capabilities:
 - run baseline audio analysis with `librosa`
 - return saved feedback reports
 
-The mobile app is not implemented yet.
+The mobile app currently supports the first upload-analysis loop: create a custom chord exercise, create a practice session, upload a take, and display feedback.
 
 ## Tech Stack
 
@@ -30,6 +30,7 @@ The mobile app is not implemented yet.
 - optional Basic Pitch integration for note-event detection
 - Pytest for tests
 - Ruff for linting
+- Expo React Native for the mobile frontend
 
 ## Important Commands
 
