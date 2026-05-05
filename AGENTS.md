@@ -132,6 +132,7 @@ The analyzer also creates `analysis_windows`:
 - note events are assigned to windows by time overlap
 - arpeggios work because tones can appear anywhere inside the same window
 - expected chord tones are compared against detected tones per window
+- feedback language summarizes matched chords, missing tones, and extra ringing tones
 
 Current analysis modes:
 

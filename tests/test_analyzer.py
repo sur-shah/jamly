@@ -1,12 +1,16 @@
 from app.services.analyzer import (
     build_analysis_windows,
+    build_feedback_summary,
     build_grid_aligned_onset_starts,
+    build_main_fix,
+    build_practice_tip,
     compare_chord_tones,
     compare_window_to_expected_chord,
     build_window_starts,
     classify_tempo,
     collect_pitch_classes_for_window,
 )
+from app.models import Exercise, Genre, Instrument, PracticeFocus, SkillLevel
 
 
 def test_classify_tempo_requires_enough_rhythm_evidence() -> None:
@@ -214,3 +218,72 @@ def test_compare_chord_tones_handles_unknown_chords() -> None:
 
     assert comparisons[0]["required_tones"] == []
     assert comparisons[0]["status"] == "unknown_chord"
+
+
+def test_feedback_summary_counts_matched_chords_and_extra_tones() -> None:
+    summary = build_feedback_summary(
+        exercise=build_test_exercise(),
+        audio_features={"duration_seconds": 8.4},
+        chord_analysis=[
+            {"expected": "Em", "status": "matched", "extra_tones": []},
+            {"expected": "C", "status": "matched", "extra_tones": ["B"]},
+            {"expected": "G", "status": "matched", "extra_tones": ["E"]},
+            {"expected": "D", "status": "matched", "extra_tones": []},
+        ],
+        note_sentence=" Basic Pitch detected 79 note events.",
+    )
+
+    assert summary == (
+        "Matched 4 of 4 expected chords for Test Progression. Basic Pitch detected "
+        "79 note events. Extra ringing tones appeared in C and G."
+    )
+
+
+def test_main_fix_prioritizes_missing_tones() -> None:
+    main_fix = build_main_fix(
+        exercise=build_test_exercise(),
+        tempo_status="on_target",
+        audio_features={"estimated_tempo_bpm": 80},
+        chord_analysis=[
+            {
+                "expected": "A7",
+                "status": "incomplete",
+                "missing_tones": ["G"],
+                "match_ratio": 0.75,
+                "extra_tones": [],
+            }
+        ],
+    )
+
+    assert main_fix == "A7 is missing or underplaying: G."
+
+
+def test_practice_tip_mentions_clean_releases_for_extra_tones() -> None:
+    practice_tip = build_practice_tip(
+        exercise=build_test_exercise(),
+        tempo_status="on_target",
+        chord_analysis=[
+            {"expected": "C", "status": "matched", "extra_tones": ["B"]},
+        ],
+    )
+
+    assert practice_tip == (
+        "Practice muting and clean releases between chord changes so old strings do "
+        "not keep ringing into the next chord."
+    )
+
+
+def build_test_exercise() -> Exercise:
+    return Exercise(
+        user_id=1,
+        title="Test Progression",
+        instrument=Instrument.guitar,
+        genre=Genre.pop,
+        level=SkillLevel.beginner,
+        focus=PracticeFocus.chords,
+        key="G",
+        tempo_bpm=80,
+        chord_progression=["Em", "C", "G", "D"],
+        steps=[],
+        target_analysis={},
+    )

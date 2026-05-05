@@ -494,15 +494,35 @@ def build_audio_feature_feedback(
         note_sentence = " Note detection is not available for this take yet."
 
     return {
-        "summary": (
-            f"Analyzed {audio_features['duration_seconds']} seconds of audio for "
-            f"{exercise.title}.{note_sentence}"
-        ),
+        "summary": build_feedback_summary(exercise, audio_features, chord_analysis, note_sentence),
         "main_fix": build_main_fix(exercise, tempo_status, audio_features, chord_analysis),
         "practice_tip": (
             build_practice_tip(exercise, tempo_status, chord_analysis)
         ),
     }
+
+
+def build_feedback_summary(
+    exercise: Exercise,
+    audio_features: dict[str, float | int],
+    chord_analysis: list[dict[str, Any]],
+    note_sentence: str,
+) -> str:
+    if not chord_analysis:
+        return (
+            f"Analyzed {audio_features['duration_seconds']} seconds of audio for "
+            f"{exercise.title}.{note_sentence}"
+        )
+
+    matched_count = sum(1 for chord in chord_analysis if chord["status"] == "matched")
+    extras = get_chords_with_extra_tones(chord_analysis)
+    summary = (
+        f"Matched {matched_count} of {len(chord_analysis)} expected chords for "
+        f"{exercise.title}.{note_sentence}"
+    )
+    if extras:
+        summary += f" Extra ringing tones appeared in {format_chord_list(extras)}."
+    return summary
 
 
 def build_main_fix(
@@ -514,6 +534,13 @@ def build_main_fix(
     chord_issue = build_chord_issue(chord_analysis)
     if chord_issue is not None:
         return chord_issue["detail"]
+
+    extras = get_chords_with_extra_tones(chord_analysis)
+    if extras:
+        return (
+            f"The core chord tones matched, but {format_chord_list(extras)} had extra "
+            "tones ringing through transitions."
+        )
 
     if tempo_status == "on_target":
         return "Your chord tones and tempo are close to the target."
@@ -535,9 +562,17 @@ def build_practice_tip(
 ) -> str:
     chord_issue = build_chord_issue(chord_analysis)
     if chord_issue is not None:
+        chord_name = chord_issue["chord"]
         return (
-            "Slow the progression down and make sure each missing tone rings inside its "
-            "chord window before moving on."
+            f"Loop the {chord_name} shape slowly and make sure each missing tone rings "
+            "before moving to the next chord."
+        )
+
+    extras = get_chords_with_extra_tones(chord_analysis)
+    if extras:
+        return (
+            "Practice muting and clean releases between chord changes so old strings do "
+            "not keep ringing into the next chord."
         )
 
     if tempo_status == "insufficient_rhythm":
@@ -550,6 +585,20 @@ def build_practice_tip(
         f"Practice with a metronome at {max(exercise.tempo_bpm - 10, 50)} BPM, then "
         f"record again at {exercise.tempo_bpm} BPM and compare the tempo estimate."
     )
+
+
+def get_chords_with_extra_tones(chord_analysis: list[dict[str, Any]]) -> list[str]:
+    return [chord["expected"] for chord in chord_analysis if chord.get("extra_tones")]
+
+
+def format_chord_list(chords: list[str]) -> str:
+    if not chords:
+        return ""
+    if len(chords) == 1:
+        return chords[0]
+    if len(chords) == 2:
+        return f"{chords[0]} and {chords[1]}"
+    return f"{', '.join(chords[:-1])}, and {chords[-1]}"
 
 
 def build_unreadable_audio_analysis(exercise: Exercise, error: str) -> dict[str, Any]:
