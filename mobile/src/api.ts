@@ -28,6 +28,15 @@ export type PracticeSession = {
   completed_at: string | null;
 };
 
+export type Recording = {
+  id: number;
+  practice_session_id: number;
+  original_filename: string;
+  content_type: string;
+  status: string;
+  created_at: string;
+};
+
 export type ChordFeedback = {
   expected: string;
   detected?: string | null;
@@ -65,7 +74,8 @@ export type FeedbackReport = {
 };
 
 export type RecordingUploadResponse = {
-  feedback_report: FeedbackReport;
+  recording: Recording;
+  feedback_report: FeedbackReport | null;
   message: string;
 };
 
@@ -120,4 +130,14 @@ export function uploadRecording(
     method: "POST",
     body: formData,
   });
+}
+
+export function analyzeRecording(
+  practiceSessionId: number,
+  recordingId: number,
+): Promise<RecordingUploadResponse> {
+  return request<RecordingUploadResponse>(
+    `/practice-sessions/${practiceSessionId}/recordings/${recordingId}/analyze`,
+    { method: "POST" },
+  );
 }

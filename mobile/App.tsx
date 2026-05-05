@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import {
+  analyzeRecording,
   API_URL,
   ChordFeedback,
   createCustomExercise,
@@ -21,6 +22,7 @@ import {
   Exercise,
   FeedbackReport,
   PracticeSession,
+  Recording,
   uploadRecording,
 } from "./src/api";
 
@@ -35,6 +37,7 @@ export default function App() {
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [practiceSession, setPracticeSession] = useState<PracticeSession | null>(null);
   const [feedback, setFeedback] = useState<FeedbackReport | null>(null);
+  const [recording, setRecording] = useState<Recording | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -55,6 +58,7 @@ export default function App() {
 
     setIsBusy(true);
     setFeedback(null);
+    setRecording(null);
     try {
       const createdExercise = await createCustomExercise({
         user_id: USER_ID,
@@ -102,7 +106,32 @@ export default function App() {
         name: asset.name,
         mimeType: asset.mimeType,
       });
-      setFeedback(uploadResult.feedback_report);
+      setRecording(uploadResult.recording);
+      setFeedback(null);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleAnalyzeTake() {
+    if (!practiceSession || !recording) {
+      Alert.alert("Upload a take first", "Pick an audio file before running analysis.");
+      return;
+    }
+
+    if (recording.status === "analyzed") {
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const result = await analyzeRecording(practiceSession.id, recording.id);
+      setRecording(result.recording);
+      if (result.feedback_report) {
+        setFeedback(result.feedback_report);
+      }
     } catch (error) {
       showError(error);
     } finally {
@@ -114,6 +143,7 @@ export default function App() {
     setExercise(null);
     setPracticeSession(null);
     setFeedback(null);
+    setRecording(null);
     setSelectedFileName(null);
   }
 
@@ -176,6 +206,14 @@ export default function App() {
             <Ionicons color="#14130F" name="refresh" size={19} />
           </Pressable>
         </View>
+        <ActionButton
+          icon={<Ionicons color="#FFFFFF" name="analytics-outline" size={18} />}
+          label={recording?.status === "analyzed" ? "Analyzed" : "Analyze take"}
+          onPress={handleAnalyzeTake}
+          disabled={isBusy || !practiceSession || !recording || recording.status === "analyzed"}
+          variant="primary"
+          fullWidth
+        />
 
         {isBusy ? (
           <View style={styles.loading}>
@@ -281,12 +319,14 @@ function ActionButton({
   onPress,
   disabled,
   variant,
+  fullWidth,
 }: {
   icon: ReactNode;
   label: string;
   onPress: () => void;
   disabled?: boolean;
   variant: "primary" | "secondary";
+  fullWidth?: boolean;
 }) {
   return (
     <Pressable
@@ -294,6 +334,7 @@ function ActionButton({
         styles.actionButton,
         variant === "primary" ? styles.primaryButton : styles.secondaryButton,
         disabled ? styles.disabledButton : null,
+        fullWidth ? styles.actionButtonFullWidth : null,
       ]}
       onPress={onPress}
       disabled={disabled}
@@ -422,6 +463,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 48,
     paddingHorizontal: 12,
+  },
+  actionButtonFullWidth: {
+    flex: 0,
+    alignSelf: "stretch",
   },
   primaryButton: {
     backgroundColor: "#2F6F62",
