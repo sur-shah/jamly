@@ -123,6 +123,12 @@ Use this order in `/docs`:
 6. `POST /practice-sessions/{practice_session_id}/recordings/{recording_id}/analyze` — use `recording.id` from step 5
 7. `GET /practice-sessions/{practice_session_id}/feedback/latest` — confirm persisted report
 
+Example:
+<img width="760" height="1026" alt="image" src="https://github.com/user-attachments/assets/7d0b91c8-d033-45e4-92b8-ff45abec9232" />
+
+<img width="416" height="486" alt="image" src="https://github.com/user-attachments/assets/f9e834a9-c61c-4faf-a6bd-f58fe3ed446b" />
+
+
 For a **custom** progression, call `POST /exercises/custom` instead of `/exercises/daily`, then continue from step 4.
 
 ## Tests and lint
