@@ -99,6 +99,12 @@ Use this sequence when manually testing in Swagger:
 
 For custom progression tests, use `POST /exercises/custom` instead of the daily exercise endpoint, then fetch the newest result with `GET /practice-sessions/{practice_session_id}/feedback/latest`.
 
+Practice history endpoints:
+
+- `GET /users/{user_id}/practice-sessions`
+- `GET /users/{user_id}/feedback-reports`
+- `GET /users/{user_id}/practice-stats`
+
 ## Audio Analysis Status
 
 The analyzer currently performs a real baseline pass:

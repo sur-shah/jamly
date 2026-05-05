@@ -166,3 +166,26 @@ class RecordingUploadRead(BaseModel):
     recording: RecordingRead
     feedback_report: FeedbackReportRead
     message: str = "Recording uploaded and analyzed."
+
+
+class PracticeSessionSummaryRead(BaseModel):
+    id: int
+    exercise_id: int
+    exercise_title: str
+    status: SessionStatus
+    started_at: datetime
+    completed_at: datetime | None
+    latest_score: int | None = None
+    latest_summary: str | None = None
+
+
+class PracticeStatsRead(BaseModel):
+    user_id: int
+    total_sessions: int
+    completed_sessions: int
+    total_recordings: int
+    total_feedback_reports: int
+    average_score: float | None
+    best_score: int | None
+    recent_score: int | None
+    common_missing_tones: list[dict[str, Any]]

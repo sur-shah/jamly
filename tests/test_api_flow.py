@@ -75,6 +75,25 @@ def test_recording_based_practice_flow(tmp_path: Path) -> None:
         assert latest_feedback_response.status_code == 200
         assert latest_feedback_response.json()["id"] == feedback[0]["id"]
 
+        sessions_response = client.get(f"/users/{user_id}/practice-sessions")
+        assert sessions_response.status_code == 200
+        sessions = sessions_response.json()
+        assert sessions[0]["id"] == practice_session_id
+        assert sessions[0]["latest_score"] is not None
+
+        reports_response = client.get(f"/users/{user_id}/feedback-reports")
+        assert reports_response.status_code == 200
+        assert reports_response.json()[0]["id"] == feedback[0]["id"]
+
+        stats_response = client.get(f"/users/{user_id}/practice-stats")
+        assert stats_response.status_code == 200
+        stats = stats_response.json()
+        assert stats["total_sessions"] >= 1
+        assert stats["completed_sessions"] >= 1
+        assert stats["total_recordings"] >= 1
+        assert stats["total_feedback_reports"] >= 1
+        assert stats["average_score"] is not None
+
 
 def test_custom_exercise_flow() -> None:
     with TestClient(app) as client:
