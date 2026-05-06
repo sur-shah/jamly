@@ -163,4 +163,4 @@ This README describes the MVP as implemented in code; behaviour may evolve as Ja
 
 ## Development
 
-Built with [Claude Code](https://claude.ai/code) and [OpenAI Codex](https://openai.com/index/openai-codex/) as AI coding assistants throughout development.
+Built with help from [Claude Code](https://claude.ai/code) and [OpenAI Codex](https://openai.com/index/openai-codex/) as AI coding assistants throughout development.
